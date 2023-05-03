@@ -1,10 +1,10 @@
 #include "jahm.h"
 
 /**
- * @brief ja::JAHM::jaInitialStepVector
- * @param begin
- * @param end
- * @param step
+ * @brief ja::JAHM::jaInitialStepVector initialize vector with values of steps
+ * @param begin - start value
+ * @param end - finish value
+ * @param step - step value
  */
 void ja::JAHM::jaInitialStepVector(const double &begin, const double &end, const double &step)
 {
@@ -21,9 +21,9 @@ void ja::JAHM::jaInitialStepVector(const double &begin, const double &end, const
 }
 
 /**
- * @brief ja::JAHM::jaCoth
- * @param a
- * @return
+ * @brief ja::JAHM::jaCoth - 1/th(x) - hyperbolic cotangent
+ * @param a - input value
+ * @return hyperbolic cotangent value
  */
 inline long double ja::JAHM::jaCoth(long double a) const
 {
@@ -31,10 +31,10 @@ inline long double ja::JAHM::jaCoth(long double a) const
 }
 
 /**
- * @brief ja::JAHM::jaIsMember
- * @param a
- * @param b_vec
- * @return
+ * @brief ja::JAHM::jaIsMember - check contain the current value in the array
+ * @param a - test value
+ * @param b_vec - array
+ * @return boolean variable
  */
 template<typename T = double>
 inline bool ja::JAHM::jaIsMember(const T &a, const std::vector<T> &b_vec) const
@@ -44,9 +44,9 @@ inline bool ja::JAHM::jaIsMember(const T &a, const std::vector<T> &b_vec) const
 }
 
 /**
- * @brief ja::JAHM::jaSignDelta
- * @param a
- * @return
+ * @brief ja::JAHM::jaSignDelta - check of sign the variable
+ * @param a - input value
+ * @return "sign" 1 or -1
  */
 template<typename T = double>
 inline int32_t ja::JAHM::jaSignDelta(const T &a) const
@@ -55,12 +55,12 @@ inline int32_t ja::JAHM::jaSignDelta(const T &a) const
 }
 
 /**
- * @brief ja::JAHM::JAHM
- * @param m_s
- * @param a
- * @param k
- * @param alpha
- * @param c
+ * @brief ja::JAHM::JAHM - constructor
+ * @param m_s - Saturation magnetization
+ * @param a - Anhysteretic shape coefficient
+ * @param k - Irreversible loss coefficient
+ * @param alpha - Internal coupling parameter
+ * @param c - Reversible coefficient
  */
 ja::JAHM::JAHM(uint32_t m_s,
                uint32_t a,
@@ -75,15 +75,15 @@ ja::JAHM::JAHM(uint32_t m_s,
 {}
 
 /**
- * @brief ja::JAHM::JAHM
- * @param m_s
- * @param a
- * @param k
- * @param alpha
- * @param c
- * @param begin
- * @param end
- * @param step
+ * @brief ja::JAHM::JAHM - constructor
+ * @param m_s - Saturation magnetization
+ * @param a - Anhysteretic shape coefficient
+ * @param k - Irreversible loss coefficient
+ * @param alpha - Internal coupling parameter
+ * @param c - Reversible coefficient
+ * @param begin - vector of steps, start value
+ * @param end - finish value
+ * @param step - step value
  */
 ja::JAHM::JAHM(uint32_t m_s,
                uint32_t a,
@@ -103,13 +103,13 @@ ja::JAHM::JAHM(uint32_t m_s,
 }
 
 /**
- * @brief ja::JAHM::JAHM
- * @param m_s
- * @param a
- * @param k
- * @param alpha
- * @param c
- * @param h_values
+ * @brief ja::JAHM::JAHM - constructor
+ * @param m_s - Saturation magnetization
+ * @param a - Anhysteretic shape coefficient
+ * @param k - Irreversible loss coefficient
+ * @param alpha - Internal coupling parameter
+ * @param c - Reversible coefficient
+ * @param h_values - using input vector with magnetic field values
  */
 ja::JAHM::JAHM(uint32_t m_s,
                uint32_t a,
@@ -131,7 +131,7 @@ ja::JAHM::~JAHM()
 
 /**
  * @brief ja::JAHM::jaSetInitialMagneticFieldValue
- * @param a
+ * @param a - initial hysteresis
  */
 void ja::JAHM::jaSetInitialMagneticFieldValue(uint32_t a)
 {
@@ -139,8 +139,8 @@ void ja::JAHM::jaSetInitialMagneticFieldValue(uint32_t a)
 }
 
 /**
- * @brief ja::JAHM::jaSetMagneticFieldStrengthVector
- * @param other
+ * @brief ja::JAHM::jaSetMagneticFieldStrengthVector - swap with other h_points vector
+ * @param other - vector with magnetic field values
  */
 void ja::JAHM::jaSetMagneticFieldStrengthVector(std::vector<double> &&other)
 {
@@ -150,9 +150,9 @@ void ja::JAHM::jaSetMagneticFieldStrengthVector(std::vector<double> &&other)
 
 /**
  * @brief ja::JAHM::jaTotalMagnetizeCalc
- * @param begin
- * @param end
- * @param step
+ * @param begin - vector of steps, start value
+ * @param end - finish value
+ * @param step - step value
  */
 void ja::JAHM::jaTotalMagnetizeCalc(double begin, double end, double step)
 {
@@ -194,6 +194,10 @@ void ja::JAHM::jaTotalMagnetizeCalc(double begin, double end, double step)
     jaRK4Routine();
 }
 
+/**
+ * @brief ja::JAHM::jaGetH
+ * @return vector of the magnetic field values
+ */
 std::vector<double> ja::JAHM::jaGetH()
 {
     for(uint32_t i=0; i<field_tot.size(); ++i)
@@ -203,6 +207,10 @@ std::vector<double> ja::JAHM::jaGetH()
     return field_tot;
 }
 
+/**
+ * @brief ja::JAHM::jaGetM
+ * @return vector of the total magnetization
+ */
 std::vector<double> ja::JAHM::jaGetM()
 {
     for(uint32_t i=0; i<field_tot.size(); ++i)
