@@ -1,6 +1,9 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
 #include <QApplication>
+#include <QDebug>
+
+constexpr double mi0 = 4 * M_PI * 1e-7;
 
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
@@ -13,6 +16,56 @@ MainWindow::MainWindow(QWidget *parent) :
     m_graphic = new QCustomPlot();
     ui->gridLayout->addWidget(m_graphic, 1, 0, 1, 1);
 
+    m_jamodel = new ja::JAHM2();
+    m_jamodel->calculate();
+
+    // Getting results
+    const auto& B = m_jamodel->getB();
+    const auto& H = m_jamodel->getH();
+    const auto& M = m_jamodel->getM();
+    const auto& t = m_jamodel->getTime();
+
+    //m_jamodel->viewB();
+    //m_jamodel->viewH();
+    //m_jamodel->viewM();
+
+    QVector<double> BB, HH, MM;
+    BB = QVector<double>::fromStdVector(B);
+    HH = QVector<double>::fromStdVector(H);
+    MM = QVector<double>::fromStdVector(M);
+
+    qDebug() << "Size of HH:" << HH.size();
+    qDebug() << "Size of BB:" << BB.size();
+    qDebug() << "First 5 elements of HH:" << HH.mid(0, 5);
+    qDebug() << "First 5 elements of BB:" << BB.mid(0, 5);
+
+    m_jamodel->saveBHToFile("bh_data.csv", 3);
+
+    m_hyst_curve = new QCPCurve(m_graphic->xAxis, m_graphic->yAxis);
+    if (!m_hyst_curve) {
+        qDebug() << "m_hyst_curve is null!";
+    }
+
+    m_hyst_curve->setName("B/H");
+    m_hyst_curve->setData(HH, BB);
+    m_hyst_curve->setPen(QPen(QColor(250, 120, 0)));
+
+    //Set labels of the coordinates
+    m_graphic->xAxis->setLabel("H");
+    m_graphic->yAxis->setLabel("B");
+
+    //Set the maximum and minimum coordinate values
+    double xMin = *std::min_element(HH.constBegin(), HH.constEnd());
+    double xMax = *std::max_element(HH.constBegin(), HH.constEnd());
+    double yMin = *std::min_element(BB.constBegin(), BB.constEnd());
+    double yMax = *std::max_element(BB.constBegin(), BB.constEnd());
+
+    m_graphic->xAxis->setRange(xMin, xMax);
+    m_graphic->yAxis->setRange(yMin, yMax);
+
+    m_hyst_curve->setVisible(true);  // The curve is visible
+    m_hyst_curve->setLayer("main");  // The curve is on the correct layer
+
     //Initialize a vertical line
     m_vertical_line = new QCPCurve(m_graphic->xAxis, m_graphic->yAxis);
 
@@ -23,31 +76,12 @@ MainWindow::MainWindow(QWidget *parent) :
     //Data vector for vertical line
     QVector<double> x(2) , y(2);
         x[0] = 0;
-        y[0] = -500000;
+        y[0] = yMin;
         x[1] = 0;
-        y[1] = 500000;
+        y[1] = yMax;
 
-    //m_graphic->addPlottable(m_vertical_line);   //Add line to canvas
     m_vertical_line->setName("Vertical");       //add name
     m_vertical_line->setData(x, y);             //and set coordinates
-
-    m_jamodel = new ja::JAHM(m_ms, m_a, m_k, m_alpha, m_c);
-    m_jamodel->jaTotalMagnetizeCalc(0, 40, 0.004);
-    QVector<double> h , m;
-    h = QVector<double>::fromStdVector(m_jamodel->jaGetH());
-    m = QVector<double>::fromStdVector(m_jamodel->jaGetM());
-
-    m_hyst_curve = new QCPCurve(m_graphic->xAxis, m_graphic->yAxis);
-    m_hyst_curve->setName("M/H");
-    m_hyst_curve->setData(h, m);
-
-    //Set labels of the coordinates
-    m_graphic->xAxis->setLabel("x");
-    m_graphic->yAxis->setLabel("y");
-
-    //Set the maximum and minimum coordinate values
-    m_graphic->xAxis->setRange(-500000, 500000);
-    m_graphic->yAxis->setRange(-500000, 500000);
 
     m_graphic->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom | QCP::iSelectPlottables);
 
@@ -67,8 +101,8 @@ void MainWindow::slotMousePress(QMouseEvent *event)
     double coordX = m_graphic->xAxis->pixelToCoord(event->pos().x());
     double coordY = m_graphic->yAxis->pixelToCoord(event->pos().y());
 
-    qDebug() << coordX;
-    qDebug() << coordY;
+    //qDebug() << coordX;
+    //qDebug() << coordY;
 
     //Preparing the X-coordinates for moving the vertical line
     QVector<double> x(2), y(2);
@@ -82,8 +116,8 @@ void MainWindow::slotMousePress(QMouseEvent *event)
     m_vertical_line->setPen(QPen(QColor(250, 120, 0)));
 
 
-    ui->lineEdit->setText("x: " + QString::number(coordX) +
-                          " y: " + QString::number(coordY));
+    ui->lineEdit->setText("H(x): " + QString::number(coordX) +
+                          " B(y): " + QString::number(coordY));
     m_graphic->replot(); //Draw the contents of the canvas
 }
 
