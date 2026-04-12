@@ -1,5 +1,5 @@
 # ja :curly_loop:
-
+ `UNDER CONSTRUCTION`
  The Jiles-Atherton (J-A) model is a commonly used physics-based model in
  describing the hysteresis characteristics of ferromagnetic materials.
 
