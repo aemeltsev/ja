@@ -10,12 +10,14 @@ CONFIG += c++17
 
 SOURCES += \
     jahm/jahm2.cpp \
+    jahm/jahm3.cpp \
     main.cpp\
     mainwindow.cpp \
     qcustomplot.cpp
 
 HEADERS += \
     jahm/jahm2.h \
+    jahm/jahm3.h \
     mainwindow.h \
     qcustomplot.h
 
