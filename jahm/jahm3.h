@@ -9,7 +9,13 @@ namespace ja {
 
 // Mathematical and physical constants
 constexpr double mu0 = 4.0 * M_PI * 1e-7;
-constexpr double eps = 1e-6;
+constexpr double eps = 1e-4;
+
+enum class SolverType
+{
+    Euler,
+    RK4
+};
 
 // Common structure of parameters for all components of model
 struct HysteresisParams
@@ -108,6 +114,8 @@ public:
      * Critical for coupling to a coil (JACoil),
      * as it determines the instantaneous inductance. */
     double get_dMdH_instant(double H, double M, double dH) const;
+
+    double rk4_step(double h, double t, double M, double Hm) const;
 
     /* Dynamically recalculates the parameters p.Ms and p.k
      * depending on the heating (linear interpolation
