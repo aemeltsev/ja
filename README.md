@@ -1,124 +1,104 @@
 # ja :curly_loop:
  `UNDER CONSTRUCTION`
- The Jiles-Atherton (J-A) model is a commonly used physics-based model in
- describing the hysteresis characteristics of ferromagnetic materials.
+## **Introduction**
+This utility calculates the classical Giles-Atherton (JA) magnetic hysteresis model. This model has found wide application in physics and engineering to simulate how ferromagnetic materials become magnetized under the influence of an external field.
 
- * the secant method used for solving anhysteretic magnetization with some optimized for faster convergence
- * for estimate magnetization was employed the Fourth Order Runge-Kutta method
+The magnetic moment inside a material is affected not only by the external field $(H)$ but also by the magnetization of adjacent regions. This combined field is called the effective field ($H_{e}$):
 
-# **General scheme of the algorithm:**
+$$
+H_{e} = H + \alpha M
+$$
 
-Create a time vector `tH` to simulate a periodic signal. The `tH` vector is filled with time values ​​from 0 to 40 with a step of `tin`. If `tin = 0.004`, then the vector will contain 10000 points.
-Create a magnetic field strength vector `Hpvec`, changing according to a sinusoidal law.
-Each element of `Hpvec` is calculated as `Hbias * sin(π * t)`, where `Hbias` is the bias amplitude.
-The `find_special_indices` function finds indices where the time signal is a multiple of 0.5 (`remainder(tH[i], 0.5) == 0`). These indices are used to determine special points where the magnetization is zeroed.
-Initialize the anhysteresis-free magnetization vectors `Man` and its derivative `dMandHvec`.
+Where $\alpha$ is the domain interaction coefficient.
 
-Calculate the anhysteresis-free magnetization `Man` and its derivative `dMandHvec` using the secant method.
+To describe the "ideal" behavior of a material without hysteresis, the Langevin function ($M_{an}$) is used. It shows what the magnetization would be if there were no defects within the material that impede the movement of the domain walls.
 
-```cpp
-secant_method(Hpvec, Man, dMandHvec, H0point);
-```
-Check for belonging to special points and if the current index belongs to `H0point`, then `Man[iH] = 0` and the derivative is calculated analytically.
-Iteration process for the remaining points. `prop0` and `prop1` are initial approximations for the secant method.
-The secant method iterations are performed until the specified accuracy or maximum number of iterations is reached.
-```cpp
-while (std::abs(fMan_sec1) >= eps * std::abs(Man_sec1) && isec < max_iter) {
-double Man_sec2 = Man_sec1 - fMan_sec1 * (Man_sec1 - Man_sec0) / (fMan_sec1 - fMan_sec0);
-// Update values ​​for the next iteration
-}
-```
-The derivative is calculated using the analytical formula.
-```cpp
-double T = (Hp + alpha * Man_sec1) / a;
-double Tsin2 = std::pow(std::sinh(T), 2);
-double T2 = std::pow(T, 2);
-double denominator = (a * Tsin2 * T2 / Ms) - (alpha * (Tsin2 - T2));
-dMandHvec[iH] = (Tsin2 - T2) / denominator;
-```
+$$
+M_{an} = M_{s} \cdot (\coth(\frac{H_{e}}{a}) - \frac{a}{H_{e}})
+$$
 
-Prepare `M1vec` vector to store total magnetization. Calculate the differential equation of total magnetization using the 4th order Runge-Kutta method.
+Real materials contain microscopic defects and impurities. When domain walls (boundaries between magnetic regions) move, they "catch" on these defects. This process is called pinning.
+  * To move a wall further, energy must be expended.
+  * This expended energy is converted into heat—this is how hysteresis losses occur.
+  * In equations, this is described by the coefficient $k$ (pinning factor).
 
-```cpp
-rk4_method(Hpvec, Man, dMandHvec, M1vec, 0.0);
-```
+Differentiating the energy balance equation in a magnetic material with respect to $B_{e}$ yields a solution describing the magnetization processes.
 
-Determine the directions of change of magnetic field.
-```cpp
-double delta = (Hvec[n] > Hvec[n-1]) ? 1.0 : -1.0;
-```
-Calculate the coefficients `k1`, `k2`, `k3`, `k4`.
-```cpp
-double k1 = (delta * k * c * dMandH + phi1) / (delta * k - alpha * phi1);
-double M1_k2 = M1vec[n-1] + h * k1 / 2.0;
-double k2 = (delta * k * c * dMandH + phi1) / (delta * k - alpha * phi1);
-// Similarly for k3 and k4
-```
+$$
+M = M_{an} - \delta k \frac{dM}{dB_{e}}
+$$
 
-Update the magnetization values.
-```cpp
-M1vec[n] = M1vec[n-1] + (h / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4);
-```
+The hysteresis loop can be represented with $B$ as a function of $H$:
 
-Find the maximum magnetization value to adjust subsequent calculations.
+$$
+B = μ_{0}(H + M)
+$$
 
-```cpp
-Mbias = *std::max_element(M1vec.begin(), M1vec.end());
-```
+or with $M$ as a function of $H$, where the dependence of $M$ on $H$ is represented in differential form so that both relationships contain the same information.
 
-We iteratively calculate for each value of the magnetic field amplitude `Hm` from the vector `Hmvec`.
+The total magnetization ($M$) is divided into two parts:
+  * Irreversible ($M_{irr}$): the domain walls overcome obstacles (pinning) and do not return to their original state. This creates a "memory" effect in the material.
+  * Reversible ($M_{rev}$): the domain walls simply "bend" under the field pressure, like an elastic membrane, and return to their original state when the field is removed. In the text, this is described by the coefficient $c$.
 
-```cpp
-for (size_t iHmax = 0; iHmax < Hmvec.size(); ++iHmax) {
-double Hm = Hmvec[iHmax];
-HACvec.resize(tH.size());
-for (size_t i = 0; i < tH.size(); ++i) {
-HACvec[i] = Hm * std::sin(M_PI * tH[i]);
-}
-std::vector<double> Hpvec_new(tH.size());
-for (size_t i = 0; i < tH.size(); ++i) {
-Hpvec_new[i] = HACvec[i] + Hbias;
-}
-```
+By combining all factors (energy balance, pinning losses, and elastic deflection of the walls), the authors derive a final differential equation. This allows one to calculate how the magnetization ($dM$) changes with a change in the external field ($dH$).
 
-Recalculating the anhysteresis-free magnetization and the total magnetization.
+$$
+\frac{dM}{dH} = \frac{1}{1 + c}\frac{1}{\delta k/μ_{0} − \alpha(M_{an} − M)}(M_{an} − M) + \frac{c}{1 + c}\frac{dM_{an}}{dH}
+$$
 
-```cpp
-std::vector<double> Man_new(Hpvec_new.size(), 0.0);
-std::vector<double> dMandHvec_new(Hpvec_new.size(), 0.0);
-secant_method(Hpvec_new, Man_new, dMandHvec_new, H0point);
+To model any magnetic material (steel, ferrite, nickel), one must substitute into the final equation:
 
-std::vector<double> M1vec_new(Hpvec_new.size(), Mbias);
-rk4_method(Hpvec_new, Man_new, dMandHvec_new, M1vec_new, Mbias);
-```
+  * $M_{s}$ (Saturation): The maximum possible magnetization. When all the magnetic moments inside are aligned, the material cannot be further magnetized.
+  * $a$ (Curve shape): Determines how quickly the material approaches saturation. Depends on the temperature and structure of the material.
+  * $k$ (Coercivity / Pinning): Controls the "width" of the loop. The larger $k$, the more defects in the material that the domain walls "catch," and the more energy is lost as heat. 
+  * $\alpha$ (Interaction): Indicates how strongly already magnetized regions help (or hinder) the magnetization of their neighbors.
+  * $c$ (Reversibility): The "elasticity" coefficient. If $c$ is large, the material behaves like rubber: it easily returns to its shape (magnetic state) when the field is removed.
 
-We obtain the magnetization and magnetic field values ​​for the stationary section (the last 10% of the signal).
+## **General scheme of the algorithm**
+### **Time Preparation and Discretization**
+To simulate a periodic signal, a time grid is generated. Unlike simple models, strict indexing is used here:
+  * **Signal Period** ($T$): 2.0 seconds.
+  * **Simulation Time**: 40 seconds (20 full periods). This is necessary to complete transient processes and allow the model to reach a stable steady-state state.
+  * **Integration Step** ($tin$): The recommended value is $0.001$ s to ensure a balance between speed and accuracy.
 
-```cpp
-size_t numst_start = static_cast<size_t>(std::floor(Hpvec_new.size() * 0.9));
-std::vector<double> tst(tH.begin() + numst_start, tH.end());
-Hst.assign(Hpvec_new.begin() + numst_start, Hpvec_new.end());
-Mst.assign(M1vec_new.begin() + numst_start, M1vec_new.end());
-for (auto& val : Mst) {
-val -= Mbias;
-}
-```
+### **Model Core - Instantaneous Susceptibility**
+Instead of the iterative secant method, an analytical calculation of the **hysteresis-free magnetization** ($M_{an}$) and its derivative is used directly within the solver. This is implemented in the `get_dMdH_instant` method, which calculates the slope of the $dM/dH$ curve for any point $(H, M)$.
 
-Calculate magnetic induction on a stationary section.
+Key formulas:
+  * **Effective field**: $H_e = H + \alpha M$ (takes into account domain interactions).
+  * **Langevin function**: Describes the ideal material response. Linearization (Taylor series) is used to protect against singularities at zero ($H \to 0$).
+  * **Energy balance**: Irreversible changes ($M_{irr}$) are calculated only under the condition of energy absorption (the condition $(M_{an} - M) \cdot \delta \gt 0$).
 
-```cpp
-Bst.resize(Hst.size());
-for (size_t i = 0; i < Hst.size(); ++i) {
-Bst[i] = mu0 * (Hst[i] + Mst[i]);
-}
-```
+### **Runge-Kutta 4th-order integrator (RK4)**
+The RK4 method is used to solve the differential equation of magnetization, significantly exceeding the Euler method in accuracy.
+At each step, the program calculates four coefficients ($k_1, k_2, k_3, k_4$), "probing" the loop curvature. This allows for an accurate description of the saturation "knee" and minimizes accumulated numerical error.
 
-# Literature
-* Gustav Mörée - Review of Hysteresis Models for Magnetic Materials
-* Guangming Xue - Numerical Solving Method for Jiles-Atherton Model and Influence Analysis of the Initial Magnetic Field on Hysteresis
-* Nowicki M.-Modeling the Hysteresis Loop of Ultra-High Permeability Amorphous Alloy for Space Applications
-* Кружаев А.В.-Компьютерное моделирование и экспериментальное исследование переходных процессов в однофазном трансформаторе напряжения
-* Chowdhury J.-Real-time Physical Modeling for Analog Tape Machines
-* Upadhaya B.-A constraint-based optimization technique for estimating physical parameters of Jiles–Atherton hysteresis model
-* Jastrzebski R.-Comparison of macroscopic descriptions of magnetization curves
-* Knypinski L.-Application of a PSO algorithm for identification of the parameters of Jiles-Atherton hysteresis model
+### **Data Stabilization and Sampling**
+The program ignores the first 19 periods ("warm-up") and writes only the last, 20th period to the buffer. This ensures that the resulting loop is steady and symmetrical.
+
+### **Drift Compensation**
+Due to microscopic rounding errors in double numbers, the loop may not close perfectly. The algorithm performs the final "stitching":
+  * The gap between the first and last point of the period is calculated ($driftH$, $driftM$).
+  * The error is distributed linearly across the entire array, making the loop geometrically closed.
+
+### **Final Calculation of Magnetic Flux Density ($B$)**
+Magnetic flux density is calculated using the "harmonized" formula from modern research (MDPI):
+
+$$
+B = \mu _{0}(H_{e} + M)
+$$
+
+Where the magnetization $M$ is pre-centered relative to its average value over the period ($M_{bias}$) to correctly determine the residual flux density ($B_{r}$).
+
+### **Physical Metrics and Analysis**
+TODO
+
+## **Recommended reading**
+  * Jiye Zhao et al. - State Space Representation of Jiles–Atherton Hysteresis Model and Application (MDPI, 2024).
+  * Guangming Xue - Numerical Solving Method for Jiles-Atherton Model and Influence Analysis.
+  * Gustav Mörée - Review of Hysteresis Models for Magnetic Materials.
+  * Nowicki M. - Modeling the Hysteresis Loop of Ultra-High Permeability Amorphous Alloy.
+  * Jastrzebski R. - Comparison of macroscopic descriptions of magnetization curves.
+  * Knypinski L. - Application of a PSO algorithm for identification of the parameters of Jiles-Atherton hysteresis model.
+  * Kuznetsov V. - Improved Jiles–Atherton Magnetic Core Model and Its SPICE Implementation(MDPI, 2026).
+  * Rupnik U. - Harmonization and Validation of Jiles–Atherton Static Hysteresis Models.
