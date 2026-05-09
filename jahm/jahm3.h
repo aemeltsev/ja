@@ -108,13 +108,16 @@ public:
     /* The main method. Starts a 20-period integration cycle (warm-up),
      * performs "stitching" of the period ends (Drift Compensation),
      * and fills the Hst, Mst, and Bst vectors. */
-    void calculate();
+    void calculate(SolverType type);
 
     /* Returns the value of \(dM/dH\) at a specific point.
      * Critical for coupling to a coil (JACoil),
      * as it determines the instantaneous inductance. */
     double get_dMdH_instant(double H, double M, double dH) const;
 
+    /*
+     * This method calculates the magnetization increment for one step.
+    */
     double rk4_step(double h, double t, double M, double Hm) const;
 
     /* Dynamically recalculates the parameters p.Ms and p.k
