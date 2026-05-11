@@ -103,12 +103,12 @@ Describes the logic for calculating the derivative $dM/dH$ to determine the stat
 Describes how, within a single time step `tin`, the program performs four "test" derivative calculations
 to predict the magnetization trajectory as accurately as possible.
 
-![RK4](https://github.com/aemeltsev/ja/blob/main/img/rk4.png)
+<img src="https://github.com/aemeltsev/ja/blob/main/img/rk4.png" width="50%">
 
 ### **The calculate method flowchart**
 Describes the high-level logic of the program's operation: from initializing parameters to obtaining a finished, "sewn" hysteresis loop.
 
-![Calculate](https://github.com/aemeltsev/ja/blob/main/img/calculate.png)
+<img src="https://github.com/aemeltsev/ja/blob/main/img/calculate.png" width="50%">
 
 ## **Recommended reading**
   * Jiye Zhao et al. - State Space Representation of Jiles–Atherton Hysteresis Model and Application (MDPI, 2024).
