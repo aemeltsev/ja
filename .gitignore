@@ -1,5 +1,7 @@
 # Prerequisites
 *.d
+*.user
+*.bak
 
 # Compiled Object files
 *.slo
