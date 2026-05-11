@@ -96,7 +96,7 @@ TODO
 ### **The flowchart of the `get_dMdH_instant` method**
 Describes the logic for calculating the derivative $dM/dH$ to determine the state of a material. This algorithm is an implementation of the J-A physical model in a single time zone.
 
-![DMDH](https://github.com/aemeltsev/ja/blob/main/img/dmdh_inst.png)
+<img src="https://github.com/aemeltsev/ja/blob/main/img/dmdh_inst.png" width="50%">
 
 ### **The flowchart of the RK4 (Runge-Kutta fourth-order) method**
 
