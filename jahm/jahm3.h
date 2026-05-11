@@ -123,7 +123,7 @@ public:
     /* Dynamically recalculates the parameters p.Ms and p.k
      * depending on the heating (linear interpolation
      * between 25°C and 100°C). */
-    void updateTemperature(double T_celsius);
+    void updateTemperature(HysteresisParams p25, HysteresisParams p100, double T_celsius);
 
     /* Analyzes the finished loop
      * and finds the coercivity (\(H_{c}\)),

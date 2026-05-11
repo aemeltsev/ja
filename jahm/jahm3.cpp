@@ -14,10 +14,50 @@ inline double ja::JAHM3::dlangevin(double x) const
     return (1.0 / (s * s)) - (1.0 / (x * x));
 }
 
-void ja::JAHM3::calculate_Man_vec(const std::vector<double> &Hvec, std::vector<double> &Man, std::vector<double> &dMan) const
+/**
+* @brief Batch calculation of the anhysteresis-free magnetization Man(H) and its derivative.
+* Used to visualize the ideal magnetization curve.
+*
+* @param Hvec Input field strength vector (A/m)
+* @param Man Output magnetization vector (A/m)
+* @param dMan Output differential susceptibility vector dMan/dHe
+*/
+void ja::JAHM3::calculate_Man_vec(const std::vector<double> &Hvec,
+                                  std::vector<double> &Man,
+                                  std::vector<double> &dMan) const
 {
-    // TODO
+    Man.clear();
+    dMan.clear();
+    Man.reserve(Hvec.size());
+    dMan.reserve(Hvec.size());
 
+    for (double H : Hvec)
+    {
+        // For an ideal curve (without hysteresis) He = H / (1 - alpha * dMan/dHe)
+        // But for a simplified display, He = H + alpha * Man is often used
+        // Here we implement a direct calculation of the Langevin function:
+
+        double x = H / p.a;
+        double Man_val = 0.0;
+        double dMan_val = 0.0;
+
+        // Linearization near zero (singularity protection)
+        if (std::abs(x) < 1e-4) {
+            Man_val = p.Ms * (x / 3.0);
+            dMan_val = p.Ms / (3.0 * p.a);
+        } else {
+            // Eq. (1) from letter
+            double coth_x = 1.0 / std::tanh(x);
+            Man_val = p.Ms * (coth_x - 1.0 / x);
+
+            // Eq. (12) from letter (Langevin derivative)
+            double s = std::sinh(x);
+            dMan_val = (p.Ms / p.a) * (1.0 / (s * s) - 1.0 / (x * x));
+        }
+
+        Man.push_back(Man_val);
+        dMan.push_back(dMan_val);
+    }
 }
 
 /**
@@ -349,3 +389,209 @@ double ja::JAHM3::rk4_step(double h, double t, double M, double Hm) const
      * */
     return (k1 + 2.0 * k2 + 2.0 * k3 + k4) / 6.0;
 }
+
+/**
+* @brief Dynamically updates the parameters of the model depending on temperature.
+*
+* The method uses linear interpolation between two sets of reference data
+* (typically 25°C and 100°C) to correct the material properties. This allows simulating the
+* effect of "sag" in magnetic properties as the core heats up.
+*
+* @param p25 Structure of parameters measured at room temperature (25°C).
+* @param p100 Structure of parameters measured at operating temperature (100°C).
+* @param T_celsius Current calculated material temperature.
+*/
+void ja::JAHM3::updateTemperature(ja::HysteresisParams p25, ja::HysteresisParams p100, double T_celsius)
+{
+    // 1. Calculate the interpolation factor (0.0 for 25°C, 1.0 for 100°C)
+    double factor = (T_celsius - 25.0) / (100.0 - 25.0);
+
+    // 2. Protect against extrapolation beyond reasonable limits.
+    // A limit of 1.5 corresponds to approximately 137.5°C, which is close to the Curie point for many ferrites.
+    factor = std::clamp(factor, 0.0, 1.5);
+
+    // 3. Interpolate the saturation magnetization (Ms) and the shape parameter (a).
+    // When heated, the Ms of ferrites drops significantly, which lowers the saturation threshold Bs.
+    p.Ms = p25.Ms + factor * (p100.Ms - p25.Ms);
+    p.a = p25.a + factor * (p100.a - p25.a);
+
+    // 4. Interpolation of the pinning coefficient (k).
+    // Typically, k decreases with heating, which makes the hysteresis loop "narrow"
+    // and reduces static losses per cycle.
+    p.k = p25.k + factor * (p100.k - p25.k);
+
+    // 5. Correction of the reversibility (c) and interaction (alpha) parameters.
+    // These quantities are less dependent on T, but taking them into account improves the accuracy
+    // of the approximation of the "knee" of the magnetization curve.
+    p.c = p25.c + factor * (p100.c - p25.c);
+    p.alpha = p25.alpha + factor * (p100.alpha - p25.alpha);
+}
+
+/**
+* @brief Analyze the calculated loop to extract
+* the material's physical characteristics.
+* The method finds the coercivity (Hc), remanent flux density (Br),
+* and saturation flux density (Bs).
+*
+* @return MaterialMetrics A structure with the calculated values ​​of Hc, Br, and Bs.
+*/
+ja::MaterialMetrics ja::JAHM3::calculateMetrics() const
+{
+    MaterialMetrics m = {0.0, 0.0, 0.0};
+
+    // Protection against empty vector (if the calculation has not been performed yet)
+    if (Hst.empty() || Bst.empty()) return m;
+
+    /* 1. Calculating B_s (Saturation Induction)
+     * Bs is defined as the induction amplitude: (max - min) / 2.
+     * This allows for correct calculation even in the presence of vertical displacement.
+     * */
+    auto [minB, maxB] = std::minmax_element(Bst.begin(), Bst.end());
+    m.Bs = (*maxB - *minB) / 2.0;
+
+    // Iterate over all points of the stationary period to find intersections of the axes
+    for (size_t i = 1; i < Hst.size(); ++i)
+    {
+        /* 2. Finding Hc (Coercive Force)
+         * Find the point where the curve intersects the H-axis
+         * (induction B becomes equal to 0).
+         * The condition B[i-1] * B[i] <= 0 means that at this step
+         * the induction has changed sign.
+         * */
+        if (Bst[i-1] * Bst[i] <= 0)
+        {
+            /* Linear interpolation to find the exact zero between grid nodes.
+             * t is the weighting factor (how close the zero is to point i-1).
+             * 1e-18 is added to avoid division by zero.
+             * */
+            double t = std::abs(Bst[i-1]) / (std::abs(Bst[i-1]) + std::abs(Bst[i]) + 1e-18);
+            double H_zero = Hst[i-1] + t * (Hst[i] - Hst[i-1]);
+
+            // We take the maximum, since there are two intersections (positive and negative).
+            m.Hc = std::max(m.Hc, std::abs(H_zero));
+        }
+
+        /* 3. Finding Br (Residual Induction)
+         * Find the point where the curve intersects the B-axis
+         * (the H-field strength becomes 0).
+         * */
+        if (Hst[i-1] * Hst[i] <= 0)
+        {
+            // Linear interpolation to find the exact value of B when H = 0.
+            double t = std::abs(Hst[i-1]) / (std::abs(Hst[i-1]) + std::abs(Hst[i]) + 1e-18);
+            double B_zero = Bst[i-1] + t * (Bst[i] - Bst[i-1]);
+
+            m.Br = std::max(m.Br, std::abs(B_zero));
+        }
+    }
+    return m;
+}
+
+/**
+* @brief Calculation of static magnetic energy losses per cycle (J/m³).
+*
+* The method calculates the area of ​​the hysteresis loop,
+* which physically corresponds to
+* the energy converted to heat due to magnetic domain friction (pinning)
+* during one complete magnetization reversal cycle.
+* The integral $\int H \, dB$ sums all the horizontal stripes within the loop;
+* the sum of these stripes gives the exact area of ​​the figure.
+* That is, each time a domain wall "jumps" over a defect in
+* the crystal (pinning), part of the energy of
+* the magnetizing field $H$ is irreversibly converted into heat.
+* The wider the loop (the larger the $k$ parameter of the model),
+* the greater the area and the higher the losses.
+*
+* @return double Energy loss per unit volume (J/m³).
+*/
+double ja::JAHM3::calculateLosses() const
+{
+    // Protection: at least 2 points are required to form the area.
+    if(Hst.size() < 2) return 0.0;
+
+    double area = 0.0;
+
+    // Numerical integration over a closed contour using the trapezoidal method.
+    // Mathematically, this is an approximation of the integral: W = \oint H dB
+    for(size_t i = 1; i < Hst.size(); ++i)
+    {
+        /*
+         * (Hst[i] + Hst[i-1]) * 0.5 — average field strength per step.
+         * (Bst[i] - Bst[i-1]) — magnetic induction increment (segment height).
+         * The output gives the area of ​​a narrow horizontal trapezoid.
+         * */
+        area += (Hst[i] + Hst[i-1] * Bst[i] - Bst[i-1]) * 0.5;
+    }
+
+    /*
+     * The integral may be biased depending on the direction of traversal.
+     * (clockwise or counterclockwise). In energy physics, losses are
+     * dimensions are always positive, hence the pregnant module.
+     * */
+    return std::abs(area);
+}
+
+/**
+* @brief Calculates the total specific power loss in the material (W/m³).
+*
+* The method combines static hysteresis losses and dynamic
+* eddy losses according to the Bertotti loss separation.
+*
+* @param frequency Operating frequency of magnetization reversal (Hz).
+* @return double Total power loss density per unit volume (W/m³).
+*/
+double ja::JAHM3::calculateTotalPowerLoss(double frequency) const
+{
+    /* 1. Hysteresis component (Ph)
+     * Calculated as the static loop energy (J/m³) multiplied by the frequency (1/s).
+     * Physically, these are losses due to domain wall friction.
+     * Increases linearly with frequency.
+     * */
+    double Ph = calculateLosses() * frequency;
+
+    /* 2. Calculating the induction amplitude
+     * For dynamic losses, the maximum induction (Bs) in a cycle is critical.
+    */
+    MaterialMetrics m = calculateMetrics();
+
+    /* 3. Eddy current losses (Pe)
+     * According to classical electrodynamics, eddy currents are induced by an alternating
+     * magnetic field. These losses are proportional to the square of the frequency and the square of the induction.
+     * k_eddy is a coefficient depending on the specific electrical resistance
+     * of the material and its geometry (sheet thickness or ferrite grain size).
+     * */
+    double k_eddy = 0.5e-4; // Empirical constant for power ferrites (MnZn)
+
+    // Eq: Pe = k_eddy * f² * B²
+    double Pe = k_eddy * std::pow(frequency * m.Bs, 2);
+
+    // 4. Summation
+    // The final result is the thermal power that the core must dissipate.
+    return Ph + Pe;
+}
+
+/**
+* @brief Generates a time vector for a stationary period.
+*
+* Creates a time scale from 0 to T, where T is the duration of one period.
+* This is necessary for the correct display of the B(t) and H(t) waveforms in the GUI,
+* so that the graphs start at time zero.
+*
+* @return std::vector<double> Vector of timestamps with a step of tin.
+*/
+std::vector<double> ja::JAHM3::getTime() const
+{
+    // The size of the time vector must strictly match the size of the Hst and Bst vectors
+    std::vector<double> t;
+    if (Hst.empty()) return t;
+
+    t.reserve(Hst.size());
+    for (size_t i = 0; i < Hst.size(); ++i) {
+        // Calculate the time of the i-th point relative to the beginning of the period
+        // t = i * tin ensures the absence of accumulated summation error
+        t.push_back(static_cast<double>(i) * tin);
+    }
+    return t;
+}
+
+
