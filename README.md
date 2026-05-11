@@ -96,19 +96,19 @@ TODO
 ### **The flowchart of the `get_dMdH_instant` method**
 Describes the logic for calculating the derivative $dM/dH$ to determine the state of a material. This algorithm is an implementation of the J-A physical model in a single time zone.
 
-![DMDH](https://github.com/aemeltsev/ja/blob/master/img/dmdh_inst.png)
+![DMDH](https://github.com/aemeltsev/ja/blob/main/img/dmdh_inst.png)
 
 ### **The flowchart of the RK4 (Runge-Kutta fourth-order) method**
 
 Describes how, within a single time step `tin`, the program performs four "test" derivative calculations
 to predict the magnetization trajectory as accurately as possible.
 
-![RK4](https://github.com/aemeltsev/ja/blob/master/img/rk4.png)
+![RK4](https://github.com/aemeltsev/ja/blob/main/img/rk4.png)
 
 ### **The calculate method flowchart**
 Describes the high-level logic of the program's operation: from initializing parameters to obtaining a finished, "sewn" hysteresis loop.
 
-![Calculate](https://github.com/aemeltsev/ja/blob/master/img/calculate.png)
+![Calculate](https://github.com/aemeltsev/ja/blob/main/img/calculate.png)
 
 ## **Recommended reading**
   * Jiye Zhao et al. - State Space Representation of Jiles–Atherton Hysteresis Model and Application (MDPI, 2024).
