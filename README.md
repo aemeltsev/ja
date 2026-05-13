@@ -119,3 +119,5 @@ Describes the high-level logic of the program's operation: from initializing par
   * Knypinski L. - Application of a PSO algorithm for identification of the parameters of Jiles-Atherton hysteresis model.
   * Kuznetsov V. - Improved Jiles–Atherton Magnetic Core Model and Its SPICE Implementation(MDPI, 2026).
   * Rupnik U. - Harmonization and Validation of Jiles–Atherton Static Hysteresis Models.
+  * Szewczyk R.-Validation of the Anhysteretic Magnetization Model for Soft Magnetic Materials with Perpendicular Anisotropy (MDPI, 2014)
+  * Gozdur R.-A Study of Temperature-Dependent Hysteresis Curves for a Magnetocaloric Composite Based on La(Fe, Mn, Si)13-H Type Alloys (MDPI, 2020)
