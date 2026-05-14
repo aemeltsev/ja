@@ -4,7 +4,7 @@
 #include <QMainWindow>
 #include <QDebug>
 #include <qcustomplot.h>
-#include "jahm/jahm2.h"
+#include "jahm/jahm3.h"
 
 namespace Ui {
 class MainWindow;
@@ -23,7 +23,7 @@ private:
     QCustomPlot    *m_graphic;      // Declare QCustomPlot object
     QCPCurve       *m_vertical_line;     // Declare object for vertical line
     QCPCurve       *m_hyst_curve;
-    ja::JAHM2       *m_jamodel;
+    ja::JAHM3       *m_jamodel;
 
 private slots:
     void slotMousePress(QMouseEvent * event);

@@ -16,77 +16,76 @@ MainWindow::MainWindow(QWidget *parent) :
     m_graphic = new QCustomPlot();
     ui->gridLayout->addWidget(m_graphic, 1, 0, 1, 1);
 
-    m_jamodel = new ja::JAHM2();
-    m_jamodel->calculate();
+    ja::HysteresisParams p3C94 = ja::JAHM3::get3C94Params(false);
+    m_jamodel = new ja::JAHM3(p3C94, 0.0005, 0.0, {800.0});
+    m_jamodel->calculate(ja::SolverType::Euler);
 
-    // Getting results
+    // Извлечение результатов расчета за один стационарный период
     const auto& B = m_jamodel->getB();
     const auto& H = m_jamodel->getH();
-    const auto& M = m_jamodel->getM();
-    const auto& t = m_jamodel->getTime();
 
-    //m_jamodel->viewB();
-    //m_jamodel->viewH();
-    //m_jamodel->viewM();
+    // Физический анализ полученной петли гистерезиса
+    ja::MaterialMetrics metrics = m_jamodel->calculateMetrics();
+    double energyLoss = m_jamodel->calculateLosses();
+    // Рассчитаем плотность мощности потерь для частоты, например, 50 кГц
+    double powerLoss = m_jamodel->calculateTotalPowerLoss(50000.0);
 
-    QVector<double> BB, HH, MM;
-    BB = QVector<double>::fromStdVector(B);
-    HH = QVector<double>::fromStdVector(H);
-    MM = QVector<double>::fromStdVector(M);
-
-    qDebug() << "Size of HH:" << HH.size();
-    qDebug() << "Size of BB:" << BB.size();
-    qDebug() << "First 5 elements of HH:" << HH.mid(0, 5);
-    qDebug() << "First 5 elements of BB:" << BB.mid(0, 5);
+    // Логирование параметров в консоль отладки
+    qDebug() << "--- Физические метрики феррита 3C94 ---";
+    qDebug() << "Индукция насыщения (Bs):" << metrics.Bs << "T";
+    qDebug() << "Коэрцитивная сила (Hc):" << metrics.Hc << "A/m";
+    qDebug() << "Остаточная индукция (Br):" << metrics.Br << "T";
+    qDebug() << "Энергия потерь за цикл:" << energyLoss << "J/m^3";
+    qDebug() << "Мощность потерь на 50 кГц:" << (powerLoss/1000.0) << "kW/m^3";
 
     m_jamodel->saveBHToFile("bh_data.csv", 3);
 
+    // Заполнение структуры данных QCustomPlot для отрисовки замкнутой кривой B(H)
+    QVector<QCPCurveData> data(H.size());
     m_hyst_curve = new QCPCurve(m_graphic->xAxis, m_graphic->yAxis);
-    if (!m_hyst_curve) {
-        qDebug() << "m_hyst_curve is null!";
+    for(size_t i = 0; i < H.size(); ++i) {
+        // Параметры: (индекс_точки, значение_X, значение_Y)
+        data[i] = QCPCurveData(static_cast<double>(i), H[i], B[i]);
     }
+    m_hyst_curve->setName("B/H Loop");
+    m_hyst_curve->data()->set(data, true);
+    m_hyst_curve->setPen(QPen(QColor(250, 120, 0), 2)); // Сделаем линию чуть толще (2px)
 
-    m_hyst_curve->setName("B/H");
-    m_hyst_curve->setData(HH, BB);
-    m_hyst_curve->setPen(QPen(QColor(250, 120, 0)));
+    // Установка подписей и диапазонов осей
+    m_graphic->xAxis->setLabel("Magnetic Field Strength, H (A/m)");
+    m_graphic->yAxis->setLabel("Magnetic Flux Density, B (T)");
 
-    //Set labels of the coordinates
-    m_graphic->xAxis->setLabel("H");
-    m_graphic->yAxis->setLabel("B");
-
-    //Set the maximum and minimum coordinate values
-    double xMin = *std::min_element(HH.constBegin(), HH.constEnd());
-    double xMax = *std::max_element(HH.constBegin(), HH.constEnd());
-    double yMin = *std::min_element(BB.constBegin(), BB.constEnd());
-    double yMax = *std::max_element(BB.constBegin(), BB.constEnd());
+    double xMin = *std::min_element(H.cbegin(), H.cend());
+    double xMax = *std::max_element(H.cbegin(), H.cend());
+    double yMin = *std::min_element(B.cbegin(), B.cend());
+    double yMax = *std::max_element(B.cbegin(), B.cend());
 
     m_graphic->xAxis->setRange(xMin, xMax);
     m_graphic->yAxis->setRange(yMin, yMax);
+    m_graphic->rescaleAxes();
 
-    m_hyst_curve->setVisible(true);  // The curve is visible
-    m_hyst_curve->setLayer("main");  // The curve is on the correct layer
+    // Эстетические отступы по краям холста
+    m_graphic->xAxis->scaleRange(1.1, m_graphic->xAxis->range().center());
+    m_graphic->yAxis->scaleRange(1.1, m_graphic->yAxis->range().center());
 
-    //Initialize a vertical line
-    m_vertical_line = new QCPCurve(m_graphic->xAxis, m_graphic->yAxis);
+    m_hyst_curve->setVisible(true);
 
-    //Connect the signals from the mouse events on graphic canvas to slots for processing
-    connect(m_graphic, &QCustomPlot::mousePress, this, &MainWindow::slotMousePress);
-    connect(m_graphic, &QCustomPlot::mouseMove, this, &MainWindow::slotMouseMove);
+    // Использование QCPItemLine вместо QCPCurve для построения идеальной вертикальной оси H=0
+    QCPItemLine *vertical_axis = new QCPItemLine(m_graphic);
+    vertical_axis->start->setCoords(0.0, yMin * 1.2); // Начало линии снизу
+    vertical_axis->end->setCoords(0.0, yMax * 1.2);   // Конец линии сверху
+    vertical_axis->setPen(QPen(Qt::gray, 1, Qt::DashLine));
+    vertical_axis->setSelectable(false); // Защита от случайного клика
 
-    //Data vector for vertical line
-    QVector<double> x(2) , y(2);
-        x[0] = 0;
-        y[0] = yMin;
-        x[1] = 0;
-        y[1] = yMax;
+    // Настройка сетки графика
+    m_graphic->xAxis->grid()->setVisible(true);
+    m_graphic->yAxis->grid()->setVisible(true);
+    m_graphic->xAxis->grid()->setSubGridVisible(true);
 
-    m_vertical_line->setName("Vertical");       //add name
-    m_vertical_line->setData(x, y);             //and set coordinates
-
+    // Включение интерактивности: перетаскивание холста, зум колесиком мыши, выбор объектов
     m_graphic->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom | QCP::iSelectPlottables);
-
-    //Draw the contents of the canvas
     m_graphic->replot();
+
 }
 
 MainWindow::~MainWindow()
@@ -104,20 +103,24 @@ void MainWindow::slotMousePress(QMouseEvent *event)
     //qDebug() << coordX;
     //qDebug() << coordY;
 
-    //Preparing the X-coordinates for moving the vertical line
+    // Берем актуальные границы видимой области графика
+    double yMinVisible = m_graphic->yAxis->range().lower;
+    double yMaxVisible = m_graphic->yAxis->range().upper;
+
     QVector<double> x(2), y(2);
     x[0] = coordX;
-    y[0] = -500000;
+    y[0] = yMinVisible;
     x[1] = coordX;
-    y[1] = 500000;
+    y[1] = yMaxVisible;
 
     //Set new coordinates
     m_vertical_line->setData(x, y);
     m_vertical_line->setPen(QPen(QColor(250, 120, 0)));
 
 
-    ui->lineEdit->setText("H(x): " + QString::number(coordX) +
-                          " B(y): " + QString::number(coordY));
+    ui->lineEdit->setText(QString("H: %1 A/m | B: %2 T")
+                              .arg(coordX, 0, 'f', 2)
+                              .arg(coordY, 0, 'f', 4));
     m_graphic->replot(); //Draw the contents of the canvas
 }
 
