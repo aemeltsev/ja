@@ -1,5 +1,7 @@
 # ja :curly_loop:
- `UNDER CONSTRUCTION`
+
+<img src="https://github.com/aemeltsev/ja/blob/main/img/main_w.png" width="50%">
+
 ## **Introduction**
 This utility calculates the classical Jiles-Atherton (JA) magnetic hysteresis model. This model has found wide application in physics and engineering to simulate how ferromagnetic materials become magnetized under the influence of an external field.
 
