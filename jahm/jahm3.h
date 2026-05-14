@@ -4,6 +4,9 @@
 #include <cmath>
 #include <algorithm>
 #include <numeric>
+#include <QFile>
+#include <QTextStream>
+#include <QDebug>
 
 namespace ja {
 
@@ -159,6 +162,8 @@ public:
     /* Generates a time scale for the X-axis of the graph
      * (from 0 to \(T\) in increments of tin). */
     std::vector<double> getTime() const;
+
+    bool saveBHToFile(QString name);
 };
 }
 #endif // JAHM3_H

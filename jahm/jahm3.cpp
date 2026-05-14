@@ -520,7 +520,7 @@ double ja::JAHM3::calculateLosses() const
          * (Bst[i] - Bst[i-1]) — magnetic induction increment (segment height).
          * The output gives the area of ​​a narrow horizontal trapezoid.
          * */
-        area += (Hst[i] + Hst[i-1] * Bst[i] - Bst[i-1]) * 0.5;
+        area += (Hst[i] + Hst[i-1]) * (Bst[i] - Bst[i-1]) * 0.5;
     }
 
     /*
@@ -592,6 +592,35 @@ std::vector<double> ja::JAHM3::getTime() const
         t.push_back(static_cast<double>(i) * tin);
     }
     return t;
+}
+
+bool ja::JAHM3::saveBHToFile(QString name)
+{
+    QFile file(name);
+
+    // Trying to open file. If we cannot open file return false.
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        // qWarning() output system reason of error to debug console
+        qWarning() << "Cannot open file for writing:" << file.errorString();
+        return false;
+    }
+
+    QTextStream stream(&file);
+    // If size of output vectors is equal
+    if (Hst.size() == Bst.size()) {
+        for(size_t i = 0; i < Hst.size(); ++i) {
+            stream << Hst[i] << "," << Bst[i] << "\n";
+        }
+    }
+
+    // Check if the disk is full and if the data was written successfully
+    if (stream.status() != QTextStream::Ok) {
+        qWarning() << "Write data to stream error.";
+        return false;
+    }
+
+    file.close();
+    return true; // Everything went well.
 }
 
 
