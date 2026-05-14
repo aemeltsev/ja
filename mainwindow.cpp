@@ -38,7 +38,19 @@ MainWindow::MainWindow(QWidget *parent) :
     qDebug() << "Энергия потерь за цикл:" << energyLoss << "J/m^3";
     qDebug() << "Мощность потерь на 50 кГц:" << (powerLoss/1000.0) << "kW/m^3";
 
-    m_jamodel->saveBHToFile("bh_data.csv", 3);
+    QDateTime local(QDateTime::currentDateTime());
+    QString filename = QString("bh_data_%1.csv").arg(local.toString("yyyy-MM-dd_hh-mm-ss"));
+
+    auto success = m_jamodel->saveBHToFile(filename);
+
+    if(!success) {
+        // In case of an error, an error window is displayed
+        QMessageBox::critical(
+            nullptr,
+            "Failed to save file",
+            QString("Failed to save the file:\n%1\n\nPlease check your access permissions or disk space.").arg(filename)
+            );
+    }
 
     // Заполнение структуры данных QCustomPlot для отрисовки замкнутой кривой B(H)
     QVector<QCPCurveData> data(H.size());
