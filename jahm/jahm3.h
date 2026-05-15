@@ -4,6 +4,7 @@
 #include <cmath>
 #include <algorithm>
 #include <numeric>
+#include <memory>
 #include <QFile>
 #include <QTextStream>
 #include <QDebug>
@@ -165,5 +166,75 @@ public:
 
     bool saveBHToFile(QString name);
 };
+
+class JACoil
+{
+private:
+    std::unique_ptr<JAHM3> m_model; // Ссылка на прецизионную физическую модель J-A
+    CoilGeometry m_geo; // Геометрия реального изделия (N, S, Le)
+
+    // Состояние «памяти» сердечника (State Variables)
+    double m_lastH = 0.0;              // Предыдущее значение поля (A/m)
+    double m_lastM = 0.0;              // Предыдущее значение намагниченности (A/m)
+    double m_currentI = 0.0;           // Текущий ток в обмотке (А)
+
+    // Тепловое состояние
+    double m_temperature;        // Текущая температура сердечника (°C)
+
+public:
+    /**
+     * @brief Конструктор катушки индуктивности с нелинейным сердечником.
+     * Стартовое состояние — полностью размагниченный холодный сердечник.
+     * Передаем владение через std::move
+     */
+    JACoil(std::unique_ptr<JAHM3> m, const CoilGeometry& g, double initial_tmp)
+        :m_model(std::move(m))
+        ,m_geo(g)
+        ,m_temperature(initial_tmp)
+    {}
+
+    // Удаляем копирование, так как unique_ptr нельзя копировать
+    JACoil(const JACoil&) = delete;
+    JACoil& operator=(const JACoil&) = delete;
+
+    JACoil(JACoil&&) = default;
+    JACoil& operator=(JACoil&&) = default;
+
+    // 1. Перевод Тока (схема) -> Поле H (материал)
+    double currentToH(double I) const;
+
+    /**
+     * @brief Основной шаг симуляции. Обновляет состояние «памяти» феррита.
+     * Вызывается симулятором на каждом временном шаге dt при подаче нового тока.
+     */
+    void updateState(double newI, double deltaTime);
+
+    /**
+     * @brief Расчет мгновенной дифференциальной индуктивности L(I).
+     * @param dI Текущее приращение тока (необходимо для определения направления delta)
+     */
+    double getDynamicInductance(double dI) const;
+
+    /**
+     * @brief Расчет мгновенного напряжения на катушке при изменении тока.
+     * Используется в симуляторах цепей (LTspice / MATLAB).
+     */
+    double getVoltage(double dI, double deltaTime) const;
+
+    /**
+     * @brief Проверка запаса по насыщению (в процентах) с учетом температуры.
+     */
+    double getSaturationMargin() const;
+
+    // Установка температуры из внешнего теплового симулятора
+    void setTemperature(double T_celsius);
+
+    // Текущая индукция в сердечнике
+    double getB() const;
+
+    // Сброс (размагничивание)
+    void reset();
+};
+
 }
 #endif // JAHM3_H

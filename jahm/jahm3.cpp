@@ -623,4 +623,91 @@ bool ja::JAHM3::saveBHToFile(QString name)
     return true; // Everything went well.
 }
 
+double ja::JACoil::currentToH(double I) const
+{
+    return (m_geo.N * I) / m_geo.Le;
+}
+
+void ja::JACoil::updateState(double newI, double deltaTime)
+{
+    if (deltaTime < 1e-12) return;
+
+    double newH = currentToH(newI);
+    double dH = newH - m_lastH;
+
+    // Если ток и поле не изменились, состояние памяти стабильно
+    if (std::abs(dH) < 1e-9) {
+        m_currentI = newI;
+        return;
+    }
+
+    // Запрашиваем мгновенный наклон dM/dH у "гармонизированной" модели JAHM3
+    // Передаем dH, чтобы модель внутри зафиксировала направление (delta = sgn(dH))
+    double dMdH = m_model->get_dMdH_instant(m_lastH, m_lastM, dH);
+
+    // Интегрируем намагниченность методом Эйлера для текущего шага симулятора
+    m_lastM += dMdH * dH;
+    m_lastH = newH;
+    m_currentI = newI;
+}
+
+double ja::JACoil::getDynamicInductance(double dI) const
+{
+    // Если приращения нет, берем фиктивное малое приращение для удержания знака
+    double dH = (m_geo.N * dI) / m_geo.Le;
+    if (std::abs(dH) < 1e-12) dH = 1e-12;
+
+    // Получаем проницаемость из модели J-A: mu_diff = dB/dH = mu0 * (1 + dM/dH)
+    double dMdH = m_model->get_dMdH_instant(m_lastH, m_lastM, dH);
+    double mu_diff = ja::mu0 * (1.0 + dMdH);
+
+    // Классическая формула индуктивности: L = (N² * S * mu_diff) / Le
+    return (m_geo.N * m_geo.N * m_geo.S * mu_diff) / m_geo.Le;
+}
+
+double ja::JACoil::getVoltage(double dI, double deltaTime) const
+{
+    if (deltaTime < 1e-12) return 0.0;
+    double L = getDynamicInductance(dI);
+    return L * (dI / deltaTime); // U = L * di/dt
+}
+
+double ja::JACoil::getSaturationMargin() const
+{
+    // 1. Вычисляем текущую индукцию B = mu0 * (He + M) согласно вашей статье
+    double He = m_lastH + 1.1e-4 * m_lastM; // alpha для 3C94 из JAHM3
+    double currentB = mu0 * (He + m_lastM);
+
+    // 2. Учет температурного проседания порога насыщения Bs
+    // По даташиту 3C94: при 25°C Bs = 0.45 Тл, при 100°C Bs = 0.32 Тл
+    double Bs_dynamic = 0.45;
+    if (m_temperature > 25.0) {
+        double factor = (m_temperature - 25.0) / (100.0 - 25.0);
+        factor = std::clamp(factor, 0.0, 1.0);
+        Bs_dynamic = 0.45 - factor * (0.45 - 0.32); // Линейное проседание порога
+    }
+
+    // 3. Расчет остаточного запаса в %
+    double margin = (1.0 - (std::abs(currentB) / Bs_dynamic)) * 100.0;
+    return std::max(0.0, margin); // Возвращаем 0%, если вошли в глубокое насыщение
+}
+
+void ja::JACoil::setTemperature(double T_celsius)
+{
+    m_temperature = T_celsius;
+}
+
+double ja::JACoil::getB() const
+{
+    double He = m_lastH + 1.1e-4 * m_lastM;
+    return mu0 * (He + m_lastM);
+}
+
+void ja::JACoil::reset()
+{
+    m_lastH = 0.0;
+    m_lastM = 0.0;
+    m_currentI = 0.0;
+}
+
 
