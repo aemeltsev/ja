@@ -170,22 +170,22 @@ public:
 class JACoil
 {
 private:
-    std::unique_ptr<JAHM3> m_model; // Ссылка на прецизионную физическую модель J-A
-    CoilGeometry m_geo; // Геометрия реального изделия (N, S, Le)
+    std::unique_ptr<JAHM3> m_model; // Link to precision physical model of JA
+    CoilGeometry m_geo; // Geometry parameters of real device (N, S, Le)
 
-    // Состояние «памяти» сердечника (State Variables)
-    double m_lastH = 0.0;              // Предыдущее значение поля (A/m)
-    double m_lastM = 0.0;              // Предыдущее значение намагниченности (A/m)
-    double m_currentI = 0.0;           // Текущий ток в обмотке (А)
+    // State of the core "memory" (State Variables)
+    double m_lastH = 0.0;              // Previous field value (A/m)
+    double m_lastM = 0.0;              // Previous magnetization value (A/m)
+    double m_currentI = 0.0;           // Current in the winding (A)
 
-    // Тепловое состояние
-    double m_temperature;        // Текущая температура сердечника (°C)
+    // Thermal state
+    double m_temperature;        // Current core termal value (°C)
 
 public:
     /**
-     * @brief Конструктор катушки индуктивности с нелинейным сердечником.
-     * Стартовое состояние — полностью размагниченный холодный сердечник.
-     * Передаем владение через std::move
+     * @brief Constructor of an inductor with a nonlinear core.
+     * Starting state: a completely demagnetized, cold core.
+     * Transfer ownership via std::move
      */
     JACoil(std::unique_ptr<JAHM3> m, const CoilGeometry& g, double initial_tmp)
         :m_model(std::move(m))
@@ -193,46 +193,46 @@ public:
         ,m_temperature(initial_tmp)
     {}
 
-    // Удаляем копирование, так как unique_ptr нельзя копировать
+    // Remove the copying since unique_ptr cannot be copied.
     JACoil(const JACoil&) = delete;
     JACoil& operator=(const JACoil&) = delete;
 
     JACoil(JACoil&&) = default;
     JACoil& operator=(JACoil&&) = default;
 
-    // 1. Перевод Тока (схема) -> Поле H (материал)
+    // 1. Transfer Current (diagram) -> H-Field (material)
     double currentToH(double I) const;
 
     /**
-     * @brief Основной шаг симуляции. Обновляет состояние «памяти» феррита.
-     * Вызывается симулятором на каждом временном шаге dt при подаче нового тока.
+     * @brief Main simulation step. Updates the ferrite's "memory" state.
+     * Called by the simulator at each time step dt when a new current is applied.
      */
     void updateState(double newI, double deltaTime);
 
     /**
-     * @brief Расчет мгновенной дифференциальной индуктивности L(I).
-     * @param dI Текущее приращение тока (необходимо для определения направления delta)
+     * @brief Calculates instantaneous differential inductance L(I).
+     * @param dI Current increment (necessary to determine delta direction)
      */
     double getDynamicInductance(double dI) const;
 
     /**
-     * @brief Расчет мгновенного напряжения на катушке при изменении тока.
-     * Используется в симуляторах цепей (LTspice / MATLAB).
+     * @brief Calculates the instantaneous voltage across the coil when the current changes.
+     * Used in circuit simulators (LTspice / MATLAB).
      */
     double getVoltage(double dI, double deltaTime) const;
 
     /**
-     * @brief Проверка запаса по насыщению (в процентах) с учетом температуры.
+     * @brief Check saturation margin (in percent) taking temperature into account.
      */
     double getSaturationMargin() const;
 
-    // Установка температуры из внешнего теплового симулятора
+    // Set temperature value from external thermal simulation
     void setTemperature(double T_celsius);
 
-    // Текущая индукция в сердечнике
+    // Current inductive value in magnetic core
     double getB() const;
 
-    // Сброс (размагничивание)
+    // Reset (demagnetise)
     void reset();
 };
 
