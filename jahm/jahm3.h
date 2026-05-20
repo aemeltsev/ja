@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <numeric>
 #include <memory>
+#include <random>
 #include <QFile>
 #include <QTextStream>
 #include <QDebug>
@@ -238,6 +239,43 @@ public:
 
     double getRelativePermeability() const;
 };
+
+// Structure for storing an experimental (reference) point
+struct ExperimentalPoint
+{
+    double H; // Magnetic field strength from the datasheet
+    double B; // Induction from the datasheet
+};
+
+// The structure of reference integral metrics
+struct TargetMetrics
+{
+    double Bs;     // Saturation from the datasheet
+    double Hc;     // Coercive force
+    double Br;     // Residual induction
+    double Losses; // (J/m3)
+};
+
+/**
+* @brief Calculate the Fitness Function to identify J-A parameters.
+* Find the trial_params parameters at which the model is as accurate as possible
+* reproduces the experimental loop and integral characteristics (Bs, Hc, Br, Losses).
+*
+* @param trial_params - Tested set of parameters from the optimizer.
+* @param exp_data - Vector of control points (H, B) from the datasheet or measurements.
+* @param target - Target material metrics (reference values).
+* @return double - Error value (the smaller, the better the model is “fitted”).
+*/
+double calculateFitness(const ja::HysteresisParams& trial_params,
+                         const std::vector<ExperimentalPoint>& exp_data,
+                         const TargetMetrics& target);
+
+/**
+* @brief Generates a random set of physical parameters for the Jiles-Atherton model.
+* Used to initialize populations in global optimization problems.
+*/
+HysteresisParams generateRandomParams();
+
 
 }
 #endif // JAHM3_H
