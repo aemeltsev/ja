@@ -165,6 +165,7 @@ public:
     std::vector<double> getTime() const;
 
     bool saveBHToFile(QString name);
+    double getAlpha() const;
 };
 
 class JACoil
@@ -234,6 +235,8 @@ public:
 
     // Reset (demagnetise)
     void reset();
+
+    double getRelativePermeability() const;
 };
 
 }

@@ -623,11 +623,29 @@ bool ja::JAHM3::saveBHToFile(QString name)
     return true; // Everything went well.
 }
 
+double ja::JAHM3::getAlpha() const
+{
+    return p.alpha;
+}
+
+/**
+ * @brief ja::JACoil::currentToH - translate the current to magnetic field strength
+ * Total current law (magnetic vector circulation theorem) - H = \fract{Iw}{l}
+ * @param I - current I penetrating the surface
+ * @return magnetic field strength
+ */
 double ja::JACoil::currentToH(double I) const
 {
     return (m_geo.N * I) / m_geo.Le;
 }
 
+/**
+ * @brief ja::JACoil::updateState - Main simulation method.
+ * Integrates magnetization step by step. It is important that it is “lazy”
+ * (skips calculation at $\delta H \approx 0$), which saves CPU resources.
+ * @param newI
+ * @param deltaTime
+ */
 void ja::JACoil::updateState(double newI, double deltaTime)
 {
     if (deltaTime < 1e-12) return;
@@ -635,36 +653,51 @@ void ja::JACoil::updateState(double newI, double deltaTime)
     double newH = currentToH(newI);
     double dH = newH - m_lastH;
 
-    // Если ток и поле не изменились, состояние памяти стабильно
+    // If the current and field didn't change, the memory state is stable
     if (std::abs(dH) < 1e-9) {
         m_currentI = newI;
         return;
     }
 
-    // Запрашиваем мгновенный наклон dM/dH у "гармонизированной" модели JAHM3
-    // Передаем dH, чтобы модель внутри зафиксировала направление (delta = sgn(dH))
+    /* Request the instantaneous slope dM/dH from the "harmonized" JAHM3 model
+     * Pass dH so that the model internally fixes the direction (delta = sgn(dH))
+     * */
     double dMdH = m_model->get_dMdH_instant(m_lastH, m_lastM, dH);
 
-    // Интегрируем намагниченность методом Эйлера для текущего шага симулятора
+    // We integrate the magnetization using the Euler method for the current step of the simulator
     m_lastM += dMdH * dH;
     m_lastH = newH;
     m_currentI = newI;
 }
 
+/**
+ * @brief ja::JACoil::getDynamicInductance - Calculates L at the current loop point.
+ * Shows how "efficient" the coil is right now.
+ * Allows you to see the drop in inductance upon saturation.
+ * @param dI
+ * @return
+ */
 double ja::JACoil::getDynamicInductance(double dI) const
 {
-    // Если приращения нет, берем фиктивное малое приращение для удержания знака
+    // If there is no increment, take a fictition small increment to maintain the sign
     double dH = (m_geo.N * dI) / m_geo.Le;
     if (std::abs(dH) < 1e-12) dH = 1e-12;
 
-    // Получаем проницаемость из модели J-A: mu_diff = dB/dH = mu0 * (1 + dM/dH)
+    // Get the permeability value from the J-A model: mu_diff = dB/dH = mu0 * (1 + dM/dH)
     double dMdH = m_model->get_dMdH_instant(m_lastH, m_lastM, dH);
     double mu_diff = ja::mu0 * (1.0 + dMdH);
 
-    // Классическая формула индуктивности: L = (N² * S * mu_diff) / Le
+    // Classical equation of inductive: L = (N² * S * mu_diff) / Le
     return (m_geo.N * m_geo.N * m_geo.S * mu_diff) / m_geo.Le;
 }
 
+/**
+ * @brief ja::JACoil::getVoltage - Calculates the voltage at the terminals.
+ * Implements Faraday's law.
+ * @param dI
+ * @param deltaTime
+ * @return
+ */
 double ja::JACoil::getVoltage(double dI, double deltaTime) const
 {
     if (deltaTime < 1e-12) return 0.0;
@@ -672,37 +705,58 @@ double ja::JACoil::getVoltage(double dI, double deltaTime) const
     return L * (dI / deltaTime); // U = L * di/dt
 }
 
+/**
+ * @brief ja::JACoil::getSaturationMargin - Safety analysis.
+ * Compares the current induction $B$ with the thermally dependent threshold $B_{s}$.
+ * @return
+ */
 double ja::JACoil::getSaturationMargin() const
 {
-    // 1. Вычисляем текущую индукцию B = mu0 * (He + M) согласно вашей статье
-    double He = m_lastH + 1.1e-4 * m_lastM; // alpha для 3C94 из JAHM3
-    double currentB = mu0 * (He + m_lastM);
+    double currentB = std::abs(getB());
 
-    // 2. Учет температурного проседания порога насыщения Bs
-    // По даташиту 3C94: при 25°C Bs = 0.45 Тл, при 100°C Bs = 0.32 Тл
-    double Bs_dynamic = 0.45;
-    if (m_temperature > 25.0) {
-        double factor = (m_temperature - 25.0) / (100.0 - 25.0);
+    // Temperature points for ferrite TODO taken out into the material structure
+    const double T_low = 25.0,  Bs_low = 0.45;
+    const double T_high = 100.0, Bs_high = 0.32;
+
+    // 2. Taking into account the temperature drop in the saturation threshold Bs
+    // According to the 3C94 datasheet: at 25°C Bs = 0.45 T, at 100°C Bs = 0.32 T
+    double Bs_dynamic = Bs_low;
+    if (m_temperature > T_low) {
+        double factor = (m_temperature - T_low) / (T_high - T_low);
         factor = std::clamp(factor, 0.0, 1.0);
-        Bs_dynamic = 0.45 - factor * (0.45 - 0.32); // Линейное проседание порога
+        Bs_dynamic = Bs_low - factor * (Bs_low - Bs_high); // Линейное проседание порога
     }
 
-    // 3. Расчет остаточного запаса в %
+    // 3. Calculation of remaining stock in %
     double margin = (1.0 - (std::abs(currentB) / Bs_dynamic)) * 100.0;
-    return std::max(0.0, margin); // Возвращаем 0%, если вошли в глубокое насыщение
+    return std::max(0.0, margin); // Return 0% if we enter deep saturation
 }
 
+/**
+ * @brief ja::JACoil::setTemperature
+ * @param T_celsius
+ */
 void ja::JACoil::setTemperature(double T_celsius)
 {
     m_temperature = T_celsius;
 }
 
+/**
+ * @brief ja::JACoil::getB - Returns the real magnetic induction (Tesla).
+ * Takes into account the $\alpha$ parameter (domain interaction),
+ * which makes the calculation more accurate than just $\mu_0(H+M)$.
+ * @return
+ */
 double ja::JACoil::getB() const
 {
-    double He = m_lastH + 1.1e-4 * m_lastM;
+    double alpha = m_model->getAlpha();
+    double He = m_lastH + alpha * m_lastM;
     return mu0 * (He + m_lastM);
 }
 
+/**
+ * @brief ja::JACoil::reset
+ */
 void ja::JACoil::reset()
 {
     m_lastH = 0.0;
@@ -710,4 +764,14 @@ void ja::JACoil::reset()
     m_currentI = 0.0;
 }
 
+/**
+ * @brief ja::JACoil::getRelativePermeability
+ * @return
+ */
+double ja::JACoil::getRelativePermeability() const
+{
+    double B = getB();
+    if (std::abs(m_lastH) < 1e-3) return 2000.0; // Value for initial permeability
+    return std::abs(B) / (mu0 * std::abs(m_lastH));
+}
 
